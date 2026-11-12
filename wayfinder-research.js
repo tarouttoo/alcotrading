@@ -8,12 +8,12 @@ const tasks = {
 };
 
 const results = await runs.all([
-  { key: "binance", label: "Research: Binance USDⓈ-M docs", agent: "general-purpose", cwd: "/home/tarouttoo/Projects/alcotrading", worktree: true, task: tasks.binance },
-  { key: "okx", label: "Research: OKX docs", agent: "general-purpose", cwd: "/home/tarouttoo/Projects/alcotrading", worktree: true, task: tasks.okx },
-  { key: "bybit", label: "Research: Bybit archive", agent: "general-purpose", cwd: "/home/tarouttoo/Projects/alcotrading", worktree: true, task: tasks.bybit },
-  { key: "fees", label: "Research: maker/taker fees", agent: "general-purpose", cwd: "/home/tarouttoo/Projects/alcotrading", worktree: true, task: tasks.fees },
-  { key: "vps", label: "Research: Tokyo VPS prices", agent: "general-purpose", cwd: "/home/tarouttoo/Projects/alcotrading", worktree: true, task: tasks.vps },
-  { key: "book", label: "Research: book chapters 9/11/12/14", agent: "general-purpose", cwd: "/home/tarouttoo/Projects/alcotrading", worktree: true, task: tasks.book }
+  { key: "binance", label: "Research: Binance USDⓈ-M docs", agent: "worker", cwd: "/home/tarouttoo/Projects/alcotrading", worktree: true, task: tasks.binance },
+  { key: "okx", label: "Research: OKX docs", agent: "worker", cwd: "/home/tarouttoo/Projects/alcotrading", worktree: true, task: tasks.okx },
+  { key: "bybit", label: "Research: Bybit archive", agent: "worker", cwd: "/home/tarouttoo/Projects/alcotrading", worktree: true, task: tasks.bybit },
+  { key: "fees", label: "Research: maker/taker fees", agent: "worker", cwd: "/home/tarouttoo/Projects/alcotrading", worktree: true, task: tasks.fees },
+  { key: "vps", label: "Research: Tokyo VPS prices", agent: "worker", cwd: "/home/tarouttoo/Projects/alcotrading", worktree: true, task: tasks.vps },
+  { key: "book", label: "Research: book chapters 9/11/12/14", agent: "worker", cwd: "/home/tarouttoo/Projects/alcotrading", worktree: true, task: tasks.book }
 ]);
 
 return results.map(r => ({ key: r.key, status: r.status, output: r.output }));
