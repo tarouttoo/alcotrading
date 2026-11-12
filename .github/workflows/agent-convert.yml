@@ -1,0 +1,58 @@
+name: Agent Convert
+
+# The ready-for-agent converter: the bridge between the skills' triage
+# vocabulary and this pipeline's trigger labels (no upstream counterpart —
+# see docs/adr/0003-ready-for-agent-converter.md). A `ready-for-agent` label
+# event evaluates that Ticket; an issue closing re-scans the Tickets it was
+# blocking, so the last blocker closing converts the waiting Ticket. No
+# schedule: the `closed` event is the only pulse.
+on:
+  issues:
+    types: [labeled, closed]
+
+# One group per triggering issue: events for one issue queue instead of
+# racing. Conversions of different Tickets are independent and may run in
+# parallel; the label swap makes a double conversion a no-op.
+concurrency:
+  group: agent-convert-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  convert:
+    if: (github.event.action == 'labeled' && github.event.label.name == 'ready-for-agent') || github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Issue bodies are untrusted: they reach only the TS script, which
+      # parses the blocking edges (native first, "## Blocked by" fallback)
+      # and decides. The hand-off label goes out with AGENT_PAT so the label
+      # event actually starts Agent Implement (the PAT cascade).
+      - name: Convert ready-for-agent Tickets
+        env:
+          AGENT_PAT: ${{ secrets.AGENT_PAT }}
+          EVENT_ACTION: ${{ github.event.action }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          OUTPUT_DIR: ${{ runner.temp }}
+        run: npx tsx .sandcastle/agent-workflows/convert/convert.ts

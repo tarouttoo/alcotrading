@@ -1,0 +1,167 @@
+name: Agent Explore
+
+# Batch triage. Any `agent:explore` label kicks a run, but each run ignores the
+# event payload and explores EVERY open `agent:explore` issue together.
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Write planned comments, label swaps and closes to the run summary instead of applying them"
+        type: boolean
+        default: true
+
+# One group for every real run: one running, at most one pending, and a newer
+# pending run replaces an older one (fine — each run re-lists the batch).
+# Events for any other label land in a throwaway group so they can never
+# replace a pending explore run.
+concurrency:
+  group: ${{ (github.event_name == 'workflow_dispatch' || github.event.label.name == 'agent:explore') && 'agent-explore-batch' || format('agent-explore-ignored-{0}', github.run_id) }}
+  cancel-in-progress: false
+
+jobs:
+  explore:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'agent:explore'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Read-only: the agent runs in this job, so nothing here can write to GitHub.
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      count: ${{ steps.batch.outputs.count }}
+
+    steps:
+      # Never read issue titles or bodies into shell or `${{ }}` — they are
+      # untrusted. They go to a JSON file and only the TS scripts read them.
+      - name: List batch
+        id: batch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          BATCH_DIR: ${{ runner.temp }}/batch
+        run: |
+          set -euo pipefail
+          sleep 5
+          mkdir -p "$BATCH_DIR"
+          gh issue list \
+            --state open \
+            --label "agent:explore" \
+            --limit 1000 \
+            --json number,title,body,author,createdAt,url,comments \
+            > "$BATCH_DIR/issues.json"
+          count=$(jq 'length' "$BATCH_DIR/issues.json")
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "Batch: $(jq -r '[.[].number | "#\(.)"] | join(", ")' "$BATCH_DIR/issues.json")"
+
+      # Uploaded before the agent runs, so the apply job validates the plan
+      # against a batch the agent could not have tampered with.
+      - name: Upload batch
+        if: steps.batch.outputs.count != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: explore-batch
+          path: ${{ runner.temp }}/batch/issues.json
+
+      - name: Checkout main
+        if: steps.batch.outputs.count != '0'
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        if: steps.batch.outputs.count != '0'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        if: steps.batch.outputs.count != '0'
+        run: npm ci
+
+      - name: Install pi CLI
+        if: steps.batch.outputs.count != '0'
+        run: npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+
+      # No GH_TOKEN in this step's env: the agent has no GitHub access at all.
+      - name: Run explore agent
+        if: steps.batch.outputs.count != '0'
+        env:
+          # Provider/model config lives here, not in code (tune cost and
+          # quality by editing env vars only). Consumed by agentFromEnv() in
+          # .sandcastle/agent-workflows/shared/common.ts.
+          AGENT_PROVIDER: zai
+          AGENT_MODEL: glm-5.3-flash
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          ISSUES_FILE: ${{ runner.temp }}/batch/issues.json
+          OUTPUT_DIR: ${{ runner.temp }}/out
+        run: npx tsx .sandcastle/agent-workflows/explore/explore.ts
+
+      - name: Upload plan
+        if: steps.batch.outputs.count != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: explore-plan
+          path: ${{ runner.temp }}/out/
+
+  apply:
+    needs: explore
+    if: needs.explore.outputs.count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download batch
+        uses: actions/download-artifact@v4
+        with:
+          name: explore-batch
+          path: ${{ runner.temp }}/batch
+
+      - name: Download plan
+        uses: actions/download-artifact@v4
+        with:
+          name: explore-plan
+          path: ${{ runner.temp }}/out
+
+      # Validates the whole plan first; on any problem it changes nothing and
+      # fails, leaving every agent:explore label in place for the next run.
+      - name: Apply plan
+        env:
+          AGENT_PAT: ${{ secrets.AGENT_PAT }}
+          BATCH_FILE: ${{ runner.temp }}/batch/issues.json
+          PLAN_FILE: ${{ runner.temp }}/out/plan.json
+          OUTPUT_DIR: ${{ runner.temp }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: npx tsx .sandcastle/agent-workflows/explore/apply.ts
+
+      # The run summary isn't readable through the API; this artifact is.
+      - name: Upload dry-run effects
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        uses: actions/upload-artifact@v4
+        with:
+          name: explore-dry-run
+          path: ${{ runner.temp }}/effects.json
