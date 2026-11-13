@@ -170,10 +170,7 @@ mod tests {
         book.snapshot(levels(&[100.0, 99.0], 1.0), levels(&[101.0], 1.0));
         let changed = book.delta(levels(&[100.0], 5.0), vec![]);
         assert!(changed);
-        assert_eq!(
-            book.bids(),
-            [Level::new(100.0, 5.0), Level::new(99.0, 1.0)]
-        );
+        assert_eq!(book.bids(), [Level::new(100.0, 5.0), Level::new(99.0, 1.0)]);
     }
 
     #[test]
