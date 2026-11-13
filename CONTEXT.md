@@ -12,6 +12,28 @@ A template repository: a label-driven agent pipeline that runs coding agents
 labels (`agent:implement`, `agent:review`, `agent:update-branch`,
 `agent:explore`); workflow code lives under `.sandcastle/agent-workflows/`.
 
+## Rust workspace (`alko`)
+
+The host project (spec issue #13) is a Rust monorepo in a Cargo workspace,
+bootstrapped by ticket T1 (issue #14):
+
+- Crates under `crates/`: `alko-core`, `alko-store`, `alko-strategy`,
+  `alko-sim`, `alko-connect-binance`, `alko-connect-bybit`,
+  `alko-connect-okx`, `alko-playground`, `alko-runner`. Each stub crate's
+  `lib.rs` names the ticket that implements it.
+- One binary, **`alko`**, lives in `alko-runner` with subcommands
+  `record` / `paper` / `replay` (stubs print "not implemented" to stderr
+  and exit non-zero until their tickets land).
+- Config is TOML; only the template `config.example.toml` is committed —
+  no secrets in the repo (it is public), secrets via environment only.
+  `config.toml` is git-ignored.
+- Rust CI is `.github/workflows/ci.yml` (`cargo fmt --check`,
+  `cargo clippy -- -D warnings`, `cargo test` on push to main and PRs).
+  Existing pipeline workflows and `.sandcastle/` are a verbatim port and
+  are not touched by CI.
+- Logging is `tracing` (subscriber initialised in the `alko` binary;
+  `RUST_LOG` env var selects the filter, default `info`).
+
 ## Glossary
 
 - **Trigger label** — a label (`agent:*`) whose addition starts a workflow.

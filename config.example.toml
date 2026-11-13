@@ -1,0 +1,16 @@
+# `alko` configuration template.
+#
+# Copy to `config.toml` (git-ignored) and edit for local runs. NEVER put
+# real credentials in this file or any committed file: this repository is
+# public — secrets live only in the environment.
+#
+# Placeholder schema: `record`, `paper` and `replay` are stubs in ticket
+# T1 (issue #14); later tickets fill in the real keys (recording streams,
+# fees, latency, monitoring and alert thresholds, risk limits).
+
+# [record]
+# pairs = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "ZECUSDT", "XRPUSDT"]
+
+# [paper]
+
+# [replay]

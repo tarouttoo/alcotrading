@@ -1,0 +1,9 @@
+[package]
+name = "alko-strategy"
+description = "Strategy trait and strategies over normalized events"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]

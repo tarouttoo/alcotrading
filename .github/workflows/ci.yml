@@ -1,0 +1,46 @@
+name: CI
+
+# Rust CI for the Cargo workspace (ticket T1, issue #14): format check,
+# clippy with warnings denied, and tests on every push to main and PR.
+# The agent-pipeline workflows under `.sandcastle/` are a verbatim port —
+# this file only adds host-repo CI and must not touch them.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Per-branch group (PRs share `refs/pull/<n>/merge`): a new push cancels
+# the superseded in-flight run instead of queueing behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust (fmt, clippy, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo build and registry
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Tests
+        run: cargo test

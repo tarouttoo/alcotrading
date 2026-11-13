@@ -1,0 +1,9 @@
+[package]
+name = "alko-store"
+description = "Local Parquet storage and retention for recorded market data"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
