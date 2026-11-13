@@ -3,7 +3,7 @@
 //! события единого формата.
 
 use crate::book::{Book, Level};
-use crate::event::{Event, EventHeader, EventKind, Gap, Trade, TradeGap};
+use crate::event::{BookUpdate, Event, EventHeader, EventKind, Gap, Trade, TradeGap};
 use crate::seq::{BookInputKind, BookSeq, SeqScheme, SeqVerdict, check_seq};
 
 /// Входящее обновление книги от коннектора: нормализованные уровни
@@ -42,6 +42,18 @@ pub struct BookFeed {
     /// Метка последнего применённого обновления (базовая линия).
     last_seq: Option<BookSeq>,
     pending: Option<PendingGap>,
+}
+
+/// Разрыв с границами: от последнего валидного обновления до первого после
+/// восстановления (спека #13).
+fn gap_event(header: EventHeader, from: i64, recovery_id: i64) -> Event {
+    Event {
+        header,
+        kind: EventKind::Gap(Gap {
+            last_valid_update_id: from,
+            first_recovered_update_id: recovery_id,
+        }),
+    }
 }
 
 impl BookFeed {
@@ -105,31 +117,28 @@ impl BookFeed {
                 };
                 self.last_seq = Some(seq);
                 let recovery_id = seq.own_id();
-                if let Some((planned, from)) = recovering {
-                    if !planned && let Some(from) = from {
-                        events.push(Event {
-                            header,
-                            kind: EventKind::Gap(Gap {
-                                last_valid_update_id: from,
-                                first_recovered_update_id: recovery_id,
-                            }),
-                        });
+                match recovering {
+                    // разрыв с границами «от последнего валидного обновления
+                    // до первого после восстановления»
+                    Some((false, Some(from))) => {
+                        events.push(gap_event(header, from, recovery_id));
                     }
-                } else if let Some(from) = atomic_gap {
-                    events.push(Event {
-                        header,
-                        kind: EventKind::Gap(Gap {
-                            last_valid_update_id: from,
-                            first_recovered_update_id: recovery_id,
-                        }),
-                    });
+                    // плановый разрыв уже отдан событием PlannedGap — границы
+                    // при восстановлении не дублируются; валидного состояния
+                    // не было — докладывать не о чем
+                    Some(_) => {}
+                    None => {
+                        if let Some(from) = atomic_gap {
+                            events.push(gap_event(header, from, recovery_id));
+                        }
+                    }
                 }
                 // снимки отдаются всегда (точки синхронизации на записи),
                 // дельты — только если изменили видимые уровни
                 if kind == BookInputKind::Snapshot || changed {
                     events.push(Event {
                         header,
-                        kind: EventKind::BookUpdate(crate::event::BookUpdate {
+                        kind: EventKind::BookUpdate(BookUpdate {
                             bids: self.book.bids().to_vec(),
                             asks: self.book.asks().to_vec(),
                             valid: true,
@@ -201,7 +210,7 @@ impl BookFeed {
     fn invalidation_marker(&self, header: EventHeader, content_seq: BookSeq) -> Event {
         Event {
             header,
-            kind: EventKind::BookUpdate(crate::event::BookUpdate {
+            kind: EventKind::BookUpdate(BookUpdate {
                 bids: self.book.bids().to_vec(),
                 asks: self.book.asks().to_vec(),
                 valid: false,
