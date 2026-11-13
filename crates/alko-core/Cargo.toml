@@ -1,0 +1,7 @@
+[package]
+name = "alko-core"
+description = "Domain events, the 20-level book and sequence validation (ticket #15)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
