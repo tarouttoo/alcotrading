@@ -73,8 +73,6 @@ impl Book {
         let (bids_before, asks_before) = (self.bids.clone(), self.asks.clone());
         merge_side(&mut self.bids, bids, Descending);
         merge_side(&mut self.asks, asks, Ascending);
-        self.bids.truncate(BOOK_DEPTH);
-        self.asks.truncate(BOOK_DEPTH);
         self.bids != bids_before || self.asks != asks_before
     }
 
@@ -104,7 +102,7 @@ fn merge_side(side: &mut Vec<Level>, updates: Vec<Level>, order: SideOrder) {
             continue;
         }
         let found = match order {
-            // заявки хранятся по убыванию цены, потому сравнение перевёрнуто
+            // заявки хранятся по убыванию цены, поэтому сравнение перевёрнуто
             Descending => side.binary_search_by(|l| level.price.total_cmp(&l.price)),
             Ascending => side.binary_search_by(|l| l.price.total_cmp(&level.price)),
         };
@@ -202,6 +200,20 @@ mod tests {
         assert!(!changed);
         assert_eq!(book.bids().len(), BOOK_DEPTH);
         assert_eq!(book.bids()[19].price, 81.0);
+    }
+
+    #[test]
+    fn delta_inserting_better_level_evicts_worst_of_full_book() {
+        let mut book = Book::new();
+        let bid_prices: Vec<f64> = (0..20).map(|i| 100.0 - f64::from(i)).collect();
+        book.snapshot(levels(&bid_prices, 1.0), vec![]);
+        // новая заявка лучше верхней: книга остаётся топ-20, худший уровень
+        // (81.0) вытесняется — то, что видит рекордер на полном стакане
+        let changed = book.delta(levels(&[101.0], 2.0), vec![]);
+        assert!(changed);
+        assert_eq!(book.bids().len(), BOOK_DEPTH);
+        assert_eq!(book.bids()[0], Level::new(101.0, 2.0));
+        assert_eq!(book.bids()[19].price, 82.0);
     }
 
     #[test]

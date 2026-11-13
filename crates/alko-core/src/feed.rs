@@ -20,7 +20,7 @@ pub struct BookInput {
 }
 
 /// Открытый разрыв: что случилось с непрерывностью и помечен ли разрыв как
-/// плановый. Существую ровно до следующего снимка.
+/// плановый. Существует ровно до следующего снимка.
 #[derive(Clone, Copy, Debug)]
 struct PendingGap {
     /// Идентификатор последнего валидного обновления до разрыва (`None`,
@@ -35,7 +35,7 @@ struct PendingGap {
 /// Правила: дельты применяются только при непрерывной последовательности;
 /// разрыв помечает книгу невалидной до следующего снимка; при восстановлении
 /// отдаётся событие «разрыв» с границами (если разрыв не был плановым и
-/// было что терять). Плановый разрыв и отсоединение invalidate книгу сразу.
+/// было что терять). Плановый разрыв и отсоединение инвалидируют книгу сразу.
 pub struct BookFeed {
     book: Book,
     scheme: SeqScheme,
@@ -795,5 +795,27 @@ mod tests {
         feed.apply(header(), trade(100));
         assert_eq!(kinds(&feed.apply(header(), trade(3))), ["trade"]);
         assert_eq!(kinds(&feed.apply(header(), trade(4))), ["trade"]);
+    }
+
+    // --- приоритет плановости: отсоединение внутри планового окна ---
+
+    #[test]
+    fn planned_gap_survives_unplanned_disconnect_mark() {
+        // плановое переподключение уже помечено: обрыв потока внутри планового
+        // окна не делает разрыв внеплановым — при восстановлении Gap не
+        // докладывается (коннектор #18 кладёт PlannedGap до отключения)
+        let mut feed = BookFeed::new(BINANCE);
+        feed.apply(input(Snapshot, b(100, 100, 100), &[100.0], &[101.0]));
+        assert_eq!(
+            kinds(&feed.mark_planned_gap(header())),
+            ["planned_gap", "book"]
+        );
+        assert!(feed.mark_disconnected(header()).is_empty());
+
+        let events = feed.apply(input(Snapshot, b(200, 200, 200), &[99.0], &[102.0]));
+        assert_eq!(kinds(&events), ["book"]);
+        assert!(gaps(&events).is_empty());
+        assert!(book_updates(&events)[0].valid);
+        assert!(feed.is_valid());
     }
 }
