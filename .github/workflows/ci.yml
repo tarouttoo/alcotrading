@@ -35,8 +35,11 @@ jobs:
       - name: rustfmt
         run: cargo fmt --all -- --check
 
+      # --locked fails the build when Cargo.lock drifts from the manifests
+      # (e.g. a dependency added to a crate without committing the lockfile
+      # update) instead of silently resolving fresh, unreproducible versions.
       - name: clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
       - name: tests
-        run: cargo test --workspace
+        run: cargo test --locked --workspace
