@@ -1,0 +1,45 @@
+name: CI
+
+# Rust CI for the alko Cargo workspace (ticket #14): rustfmt, clippy and
+# tests on every push to main and every PR. Deliberately a separate file —
+# the agent pipeline workflows are a verbatim port and are not touched
+# (see AGENTS.md).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: rust (fmt + clippy + test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+
+      # --locked fails the build when Cargo.lock drifts from the manifests
+      # (e.g. a dependency added to a crate without committing the lockfile
+      # update) instead of silently resolving fresh, unreproducible versions.
+      - name: clippy
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+      - name: tests
+        run: cargo test --locked --workspace

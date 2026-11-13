@@ -1,0 +1,19 @@
+[package]
+name = "alko-runner"
+description = "Home of the single `alko` binary: record / paper / replay entrypoints"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "alko"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+toml.workspace = true

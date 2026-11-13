@@ -1,0 +1,47 @@
+# Шаблон конфига `alko` (тикет #14). Значения — плейсхолдеры до первых
+# суток записи (спека #13): пороги тюнятся правкой конфига.
+# Секретов здесь нет и быть не должно — репозиторий публичный, токены и
+# ключи передаются только через окружение (например, TG_TOKEN).
+
+[general]
+# Фиксированный список пар фазы 1 (ADR 0004), канонические идентификаторы
+# BASEUSDT; замена пары рвёт непрерывность данных.
+pairs = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "ZECUSDT", "XRPUSDT"]
+# Глубина стакана, уровней на сторону.
+book_depth = 20
+
+[record]
+# Каталог Parquet-файлов, один файл на пару и день (UTC).
+data_dir = "data"
+# Хранение: удалять файлы старше N дней.
+retention_days = 30
+# Замер server time для поправки часов биржи (ADR 0005), раз в N секунд.
+clock_offset_interval_sec = 60
+
+# Комиссии maker/taker в bps (значения из спеки #13).
+[exchange.binance]
+maker_fee_bps = 2.0
+taker_fee_bps = 5.0
+
+[exchange.bybit]
+maker_fee_bps = 2.0
+taker_fee_bps = 5.5
+
+[exchange.okx]
+maker_fee_bps = 2.0
+taker_fee_bps = 5.0
+
+[monitoring]
+# Пороги мониторинга — плейсхолдеры; алерты в Telegram (токен — в окружении).
+disk_usage_warn_percent = 80
+# REST-сверка накопленной книги со снимком биржи, раз в N секунд.
+rest_reconcile_interval_sec = 300
+
+[paper]
+# Задержка исполнения, мс до биржи (значение подставляется из тикета #10
+# после замеров).
+latency_ms = 50
+
+[playground]
+# Стартовый баланс replay-бэктеста, USDT.
+initial_balance_usdt = 10000.0
