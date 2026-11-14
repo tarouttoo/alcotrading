@@ -23,3 +23,7 @@ clap = { version = "4.5", features = ["derive"] }
 toml = "0.9"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+arrow = { version = "60.1", default-features = false }
+parquet = { version = "60.1", default-features = false, features = ["arrow", "snap"] }
+alko-core = { path = "crates/alko-core" }
+tempfile = "3"
