@@ -84,7 +84,6 @@ mod tests {
             assert_eq!(parse_day(&text), Some(day), "{text}");
         }
         assert_eq!(format_day(19_723), "2024-01-01");
-        assert_eq!(parse_day("2024-02-29"), parse_day("2024-02-29"));
         assert_eq!(format_day(parse_day("2024-02-29").unwrap()), "2024-02-29");
     }
 
@@ -98,5 +97,21 @@ mod tests {
         assert_eq!(parse_day("2026-01-01x"), None);
         assert_eq!(parse_day(""), None);
         assert_eq!(parse_day("2026"), None);
+    }
+
+    /// Несуществующие календарные даты не парсятся: форма 4-2-2 не
+    /// достаточна, дата обязана существовать (в т.ч. не-високосный 29
+    /// февраля — проверка существования, а не только диапазона дня).
+    #[test]
+    fn parse_rejects_nonexistent_calendar_dates() {
+        assert_eq!(parse_day("2023-02-29"), None);
+        assert_eq!(parse_day("2026-02-30"), None);
+        assert_eq!(parse_day("2026-02-31"), None);
+        assert_eq!(parse_day("2026-04-31"), None);
+        // а високосный день существует и обратим
+        assert_eq!(
+            parse_day("2024-02-29").map(format_day).as_deref(),
+            Some("2024-02-29")
+        );
     }
 }

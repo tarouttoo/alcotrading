@@ -79,7 +79,7 @@ impl std::fmt::Display for StoreError {
                 open_day,
             } => write!(
                 f,
-                "событие дня {} позже открытого дня {}: день уже закрыт",
+                "событие дня {} раньше открытого дня {}: день уже закрыт",
                 day::format_day(*event_day),
                 day::format_day(*open_day)
             ),

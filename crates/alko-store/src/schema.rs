@@ -84,10 +84,24 @@ fn level_fields() -> Fields {
     ])
 }
 
+/// Проверка схемы файла или батча на соответствие контракту [`schema`]:
+/// имена, типы и nullability колонок — по порядку, включая вложенные поля
+/// структур уровня. Файл чужой схемы — не наша запись, даже если в нём нет
+/// ни одной строки: имя-совместимый файл с nullable ценой уровня иначе
+/// декодируется с молча обнулённой ценой.
+pub(crate) fn ensure_schema(actual: &SchemaRef) -> Result<(), crate::StoreError> {
+    if actual.fields() != schema().fields() {
+        return Err(crate::StoreError::Schema(
+            "схема файла не совпадает со схемой хранилища".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 /// Схема Parquet-файла: единственное описание колонок для writer и reader.
 /// Порядок и nullability колонок зафиксированы тестами выше — это контракт
 /// датасета, читаемого годами (перестроение схемы после старта записи
-/// болезненнно, см. ADR 0005).
+/// болезненно, см. ADR 0005).
 pub fn schema() -> SchemaRef {
     let field =
         |name: &str, dtype: DataType, nullable: bool| Arc::new(Field::new(name, dtype, nullable));
@@ -363,21 +377,9 @@ fn side(s: &str) -> Result<TradeSide, crate::StoreError> {
 /// Декодировать батч, записанный [`event_to_batch`], обратно в события —
 /// по строке на событие, в порядке строк файла.
 pub fn batch_to_events(batch: &RecordBatch) -> Result<Vec<Event>, crate::StoreError> {
-    // имена колонок по порядку — тот же контракт, что закреплён тестами
-    // схемы; чужой файл не декодируется молча
-    let s = schema();
-    let expected: Vec<&str> = s.fields().iter().map(|f| f.name().as_str()).collect();
-    let actual_schema = batch.schema();
-    let actual: Vec<&str> = actual_schema
-        .fields()
-        .iter()
-        .map(|f| f.name().as_str())
-        .collect();
-    if actual != expected {
-        return Err(crate::StoreError::Schema(
-            "схема файла не совпадает с схемой хранилища".to_string(),
-        ));
-    }
+    // тот же контракт, что закреплён тестами схемы; чужой батч не
+    // декодируется молча
+    ensure_schema(&batch.schema())?;
 
     let mut events = Vec::with_capacity(batch.num_rows());
     for i in 0..batch.num_rows() {
@@ -808,6 +810,30 @@ mod tests {
         let missing_payload = RecordBatch::try_new(schema(), cols).unwrap();
         assert!(matches!(
             batch_to_events(&missing_payload),
+            Err(crate::StoreError::Schema(_))
+        ));
+    }
+
+    /// Проверка схемы различает не только имена: та же схема по именам,
+    /// но с nullable-парой — чужой контракт и отвергается.
+    #[test]
+    fn ensure_schema_rejects_nullability_drift() {
+        assert!(ensure_schema(&schema()).is_ok());
+        let drifted = Schema::new(
+            schema()
+                .fields()
+                .iter()
+                .map(|f| {
+                    if f.name() == "pair" {
+                        Field::new("pair", DataType::Utf8, true)
+                    } else {
+                        f.as_ref().clone()
+                    }
+                })
+                .collect::<Vec<_>>(),
+        );
+        assert!(matches!(
+            ensure_schema(&SchemaRef::new(drifted)),
             Err(crate::StoreError::Schema(_))
         ));
     }
