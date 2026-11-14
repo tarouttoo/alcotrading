@@ -52,6 +52,10 @@ version = "0.1.0"
 [[package]]
 name = "alko-strategy"
 version = "0.1.0"
+dependencies = [
+ "alko-core",
+ "tracing",
+]
 
 [[package]]
 name = "anstream"
